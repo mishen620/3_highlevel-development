@@ -3,15 +3,24 @@ import sqlite3
 import numpy as np
 import time
 
-curr_angle=122.6019568
+
+#read the following inputs from the board
+curr_angle=62
+number_of_reps=6
+
+
 # Read the first sheet
 ds_curl_flexion = pd.read_csv('generalized_curl_flexion.csv')
 ds_curl_extension = pd.read_csv('generalized_curl_extension.csv')
 
-last_states=[123.9724515, 123.7027902, 123.4314282, 123.1569917, 122.880542]
+last_states=[60.90983284206268, 61.12161056629257, 61.332797560605094, 61.54373428281216, 61.75394691218596]
 
-
-import numpy as np
+def update_last_states(new_theta, max_size=5):
+   
+    global last_states
+    if len(last_states) >= max_size:
+        last_states.pop(0)
+    last_states.append(new_theta)
 
 def build_state_vector(theta_now, theta_prev):
 
@@ -40,10 +49,12 @@ def get_lower_A_matrix(given_theta, phase):
     for i in range(len(df) - 1):
         theta1 = df.iloc[i]['theta']
         theta2 = df.iloc[i + 1]['theta']
-        if theta1 <= given_theta <= theta2:
-            lower_index = int(df.iloc[i]['step_index'])
+        if theta1 <= given_theta < theta2:
+            if phase=="curl_flexion":
+                lower_index = int(df.iloc[i]['step_index'])-1
+            else:
+                lower_index=int(df.iloc[i]['step_index'])
             break
-
     cursor = conn.cursor()
 
     # Step 3: Handle out-of-range → return 2x2 zero matrix
@@ -57,21 +68,24 @@ def get_lower_A_matrix(given_theta, phase):
 
     # Step 4: Fetch corresponding 2x2 A matrix
     A_query = """
-        SELECT a11, a12,
-               a21, a22
-        FROM full_theta_with_A
-        WHERE dataset_name = ? AND step_index = ?
+    SELECT theta, a11, a12,
+                  a21, a22
+    FROM full_theta_with_A
+    WHERE dataset_name = ? AND step_index = ?
     """
     cursor.execute(A_query, (phase, lower_index))
     row = cursor.fetchone()
     conn.close()
 
-    A_matrix = np.array(row).reshape(2, 2)
+    theta_value = row[0]
+    A_matrix = np.array(row[1:]).reshape(2, 2)
+    print(A_matrix)
 
     return {
         "matched_theta": df[df['step_index'] == lower_index]['theta'].values[0],
         "step_index": lower_index,
-        "A_matrix": A_matrix
+        "A_matrix": A_matrix,
+        "current_theta": theta_value
     }
 
 def direction(past_angles):
@@ -79,7 +93,7 @@ def direction(past_angles):
     diffs = [past_angles[i+1] - past_angles[i] for i in range(len(past_angles)-1)]
 
     avg_diff = sum(diffs) / len(diffs)
-    print(avg_diff)
+    #print(avg_diff)
     if avg_diff > 0.1:
         return 1
     elif avg_diff < -0.1:
@@ -91,30 +105,73 @@ def direction(past_angles):
 
 def assign_state(state,dir):
     if dir>0:
-        result = get_lower_A_matrix(state, "curl_flexion")
-        return result['A_matrix']
+        result = get_lower_A_matrix(state, "curl_extension")
+        return [result['A_matrix'],result['current_theta']]
 
     elif dir<0:
         result = get_lower_A_matrix(state, "curl_flexion")
-        return result['A_matrix']
+        return [result['A_matrix'],result['current_theta']]
     else:
         pass
 
 
 
 if __name__ == "__main__":
-    direction=direction(last_states)
-    start_time = time.time()
-    state_matrix_A=assign_state(curr_angle,direction)
-    
-    theta_now = curr_angle
+    for i in range(0,number_of_reps):
+        curr_angle=62
+        while True:
+            if len(last_states)<=5:
+                direction=-1
 
-    theta_prev = last_states[-1]
-    state_vector_X = build_state_vector(theta_now, theta_prev)
+            else:
+                direction=direction(last_states)
+            
+            if direction!=0:
+                start_time = time.time()
+                get_state_matrix_A_and_curr_angle=assign_state(curr_angle,direction)
+                state_matrix_A=get_state_matrix_A_and_curr_angle[0]
+                
+                theta_now = get_state_matrix_A_and_curr_angle[1]
 
-    estimated_next_angle=compute_next_state(state_matrix_A, state_vector_X)
-    end_time = time.time()
-    
-    execution_time = end_time - start_time
-    print(f"Execution time: {execution_time:.6f} seconds")
-    print(estimated_next_angle)
+                theta_prev = last_states[-1]
+                
+                state_vector_X = build_state_vector(theta_now, theta_prev)
+                
+                estimated_next_angle=compute_next_state(state_matrix_A, state_vector_X)[0]
+                update_last_states(estimated_next_angle)
+                end_time = time.time()
+                
+                execution_time = end_time - start_time
+                #print(f"Execution time: {execution_time:.6f} seconds")
+                print(estimated_next_angle)
+            else:
+                break
+        
+        # sleeping time between the phase change
+
+        time.sleep(0.8)
+            
+        while True:
+            direction=direction(last_states)
+            if direction!=0:
+                start_time = time.time()
+                get_state_matrix_A_and_curr_angle=assign_state(curr_angle,direction)
+                state_matrix_A=get_state_matrix_A_and_curr_angle[0]
+                
+                theta_now = get_state_matrix_A_and_curr_angle[1]
+
+                theta_prev = last_states[-1]
+                
+                state_vector_X = build_state_vector(theta_now, theta_prev)
+                
+                estimated_next_angle=compute_next_state(state_matrix_A, state_vector_X)[0]
+                update_last_states(estimated_next_angle)
+                end_time = time.time()
+                
+                execution_time = end_time - start_time
+                #print(f"Execution time: {execution_time:.6f} seconds")
+                print(estimated_next_angle)
+            else:
+                break
+
+        time.sleep(0.8)

@@ -1,13 +1,20 @@
-import pandas as pd
+# Define global buffer
+theta_buffer = [155.0, 155.8, 156.4, 156.9, 157.5]
 
-#current_state=input()
-# Read the first sheet
-ds_curl_flexion = pd.read_csv('generalized_curl_flexion.csv')
-ds_curl_extension = pd.read_csv('generalized_curl_extension.csv')
+def update_theta_buffer(new_theta, max_size=5):
+    """
+    Updates the global theta_buffer by removing the first element
+    and appending the new theta value.
 
-time=ds_curl_extension.columns[0]
-angle=ds_curl_extension.columns[1]
-#print(time,angle)
+    Args:
+        new_theta (float): The latest theta value to add.
+        max_size (int): Maximum size of the buffer.
+    """
+    global theta_buffer
+    if len(theta_buffer) >= max_size:
+        theta_buffer.pop(0)
+    theta_buffer.append(new_theta)
 
-
-print(ds_curl_flexion.iloc[2, 1])
+update_theta_buffer(158.1)
+print(theta_buffer)
+# Output: [155.8, 156.4, 156.9, 157.5, 158.1]
