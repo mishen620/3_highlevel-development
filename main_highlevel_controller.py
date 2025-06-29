@@ -14,8 +14,15 @@ ds_curl_flexion = pd.read_csv('generalized_curl_flexion.csv')
 ds_curl_extension = pd.read_csv('generalized_curl_extension.csv')
 
 last_states=[60.90983284206268, 61.12161056629257, 61.332797560605094, 61.54373428281216, 61.75394691218596]
+initial_encoder_value=12.5
 
+def Encoder_angle_initialization(curr_encoder_value):
+    initial_encoder_value=curr_encoder_value
 
+def curr_angle(curr_encoder_value):
+    theta=20 #initialize these two values pakoo
+    pulse=100 #initialize these two values pakoo
+    calculated_current_angle=(curr_encoder_value-initial_encoder_value)*(theta/pulse)+155
 
 def exersice_loop(encorder_curr_angle,direction):
 
